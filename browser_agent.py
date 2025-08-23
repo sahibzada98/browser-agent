@@ -19,9 +19,15 @@ load_dotenv()
 # print BROWSER_USE_LOGGING_LEVEL
 print(os.getenv('BROWSER_USE_LOGGING_LEVEL'))
 
-# Create a temporary browser profile for testing
+# Create a clean temporary browser profile for testing
+import tempfile
+import uuid
+
+# Use unique temporary directory to avoid conflicts
+profile_dir = tempfile.mkdtemp(prefix=f"browser-agent-{uuid.uuid4().hex[:8]}-")
 browser_profile = BrowserProfile(
-    user_data_dir='/tmp/browser-agent-profile'
+    user_data_dir=profile_dir,
+    headless=False,  # Visual mode for debugging
 )
 browser_session = BrowserSession(browser_profile=browser_profile)
 
