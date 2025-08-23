@@ -32,6 +32,177 @@ browser_profile = BrowserProfile(
 browser_session = BrowserSession(browser_profile=browser_profile)
 
 
+def extract_parameters_from_task(task: str) -> dict[str, str]:
+    """Extract parameters from the original user task."""
+    parameters = {}
+    task_lower = task.lower()
+    
+    # Extract website parameter
+    websites = ["google.com", "bing.com", "github.com", "example.com", "youtube.com"]
+    for website in websites:
+        if website in task_lower:
+            parameters["website"] = website
+            break
+    
+    # Extract search term parameter
+    if "search for" in task_lower:
+        parts = task.split("search for")
+        if len(parts) > 1:
+            search_term = parts[1].strip()
+            # Remove common endings like "on google", "tutorials", etc.
+            search_term = search_term.replace(" on google", "").replace(" on bing", "")
+            parameters["search_term"] = search_term
+    
+    return parameters
+
+
+def extract_parameters_from_flow(flow_data: dict) -> dict[str, str]:
+    """Extract potential parameters from a flow - check original task first."""
+    # Try to get parameters from original user task first
+    original_task = flow_data.get("original_user_task")
+    if original_task:
+        parameters = extract_parameters_from_task(original_task)
+        if parameters:
+            return parameters
+    
+    # Fallback to extracting from actions (old method)
+    parameters = {}
+    history = flow_data.get("history", [])
+    for step in history:
+        model_output = step.get("model_output", {})
+        actions = model_output.get("action", [])
+        
+        for action in actions:
+            for action_type, action_params in action.items():
+                # Extract URL parameters
+                if action_type == "go_to_url" and "url" in action_params:
+                    url = action_params["url"]
+                    # Simple heuristic: extract domain as parameter
+                    if "://" in url:
+                        domain = url.split("://")[1].split("/")[0]
+                        if not domain.startswith("www."):
+                            parameters["website"] = domain
+                        else:
+                            parameters["website"] = domain[4:]  # Remove www.
+                
+                # Extract text parameters
+                if action_type == "input_text" and "text" in action_params:
+                    text = action_params["text"]
+                    if len(text.strip()) > 0:
+                        parameters["search_term"] = text
+    
+    return parameters
+
+
+def substitute_parameters_in_task(original_task: str, param_values: dict[str, str], original_params: dict[str, str]) -> str:
+    """Substitute parameters in the original task using simple string replacement."""
+    new_task = original_task
+    
+    for param_name, new_value in param_values.items():
+        if param_name == "website" and param_name in original_params:
+            # Replace the original website with new one
+            old_website = original_params[param_name]
+            new_task = new_task.replace(old_website, new_value)
+        elif param_name == "search_term" and param_name in original_params:
+            # Replace the original search term with new one
+            old_search_term = original_params[param_name]
+            new_task = new_task.replace(old_search_term, new_value)
+    
+    return new_task
+
+
+async def replay_flow_with_params(flow_name: str, api_key: str):
+    """Replay a saved flow with parameter substitution."""
+    flows_dir = Path("flows")
+    flow_path = flows_dir / f"{flow_name}.json"
+    
+    if not flow_path.exists():
+        print(f"Error: Flow '{flow_name}' not found at {flow_path}")
+        return
+    
+    print(f"🔄 Loading flow: {flow_path}")
+    
+    try:
+        with open(flow_path, 'r') as f:
+            flow_data = json.load(f)
+        
+        history = flow_data.get("history", [])
+        if not history:
+            print("Error: No history found in flow")
+            return
+        
+        # Extract the clean original user task
+        original_task = flow_data.get("original_user_task")
+        
+        if not original_task:
+            # Fallback to AI reasoning if original task not available
+            first_step = history[0]
+            original_task = first_step.get("model_output", {}).get("thinking", "Replay saved flow")
+            print("⚠️ Using AI reasoning as task (old flow format)")
+        
+        print(f"📝 Original task: {original_task}")
+        
+        # Extract parameters from the flow
+        parameters = extract_parameters_from_flow(flow_data)
+        
+        if not parameters:
+            print("❌ No parameters found in this flow. Use --replay-flow instead.")
+            return
+        
+        print(f"\n🔧 Parameters found:")
+        param_values = {}
+        
+        for param_name, default_value in parameters.items():
+            print(f"   • {param_name}: {default_value}")
+            new_value = input(f"Enter new value for '{param_name}' (press Enter for default): ").strip()
+            
+            if new_value:
+                param_values[param_name] = new_value
+                print(f"   ✅ Will use: {new_value}")
+            else:
+                param_values[param_name] = default_value
+                print(f"   ⏯️ Using default: {default_value}")
+        
+        # Substitute parameters in the original task
+        new_task = substitute_parameters_in_task(original_task, param_values, parameters)
+        
+        print(f"\n🔄 New task: {new_task}")
+        print("=" * 50)
+        
+        # Initialize browser components
+        llm = ChatAnthropic(
+            model="claude-3-5-sonnet-20241022",
+            api_key=api_key,
+            timeout=100
+        )
+        controller = Controller()
+        
+        # Create agent to execute the parameterized task
+        agent = Agent(
+            task=new_task,
+            llm=llm,
+            controller=controller,
+            keep_browser_open=True,
+            browser_session=browser_session
+        )
+        
+        print("🚀 Executing parameterized task...")
+        
+        # Execute the parameterized task
+        result = await agent.run()
+        
+        print("=" * 50)
+        print("✅ Parameterized flow replay completed!")
+        print(f"📄 Final result: {result}")
+        
+    except json.JSONDecodeError:
+        print(f"Error: Invalid JSON in flow file {flow_path}")
+    except Exception as e:
+        print(f"❌ Error replaying flow with parameters: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 async def replay_flow(flow_name: str, api_key: str):
     """Replay a saved flow."""
     flows_dir = Path("flows")
@@ -125,6 +296,15 @@ async def main():
             print("Usage: python browser_agent.py --replay-flow \"flow_name\"")
             return
     
+    if "--replay-flow-with-params" in sys.argv:
+        try:
+            flow_index = sys.argv.index("--replay-flow-with-params")
+            replay_flow_name = sys.argv[flow_index + 1]
+        except (IndexError, ValueError):
+            print("Error: --replay-flow-with-params requires a flow name")
+            print("Usage: python browser_agent.py --replay-flow-with-params \"flow_name\"")
+            return
+    
     # Check for API key
     api_key = os.getenv('ANTHROPIC_API_KEY')
     if not api_key:
@@ -134,7 +314,10 @@ async def main():
     
     # Handle flow replay
     if replay_flow_name:
-        await replay_flow(replay_flow_name, api_key)
+        if "--replay-flow-with-params" in sys.argv:
+            await replay_flow_with_params(replay_flow_name, api_key)
+        else:
+            await replay_flow(replay_flow_name, api_key)
         return
     
     # Get user prompt
@@ -189,11 +372,21 @@ async def main():
             flows_dir = Path("flows")
             flows_dir.mkdir(exist_ok=True)
             
-            # Save the flow
+            # Save the flow with original user task
             flow_path = flows_dir / f"{save_flow_name}.json"
-            result.save_to_file(flow_path)
+            
+            # Get the default flow data
+            flow_data = result.model_dump()
+            
+            # Add the original user task for better replay
+            flow_data["original_user_task"] = prompt
+            
+            # Save enhanced flow data
+            with open(flow_path, 'w', encoding='utf-8') as f:
+                json.dump(flow_data, f, indent=2)
             
             print(f"\n✅ Flow saved as: {flow_path}")
+            print(f"   Original task: {prompt}")
             print(f"   Total steps: {result.number_of_steps()}")
             print(f"   Actions recorded: {len(result.model_actions())}")
             print(f"   Duration: {result.total_duration_seconds():.1f}s")
