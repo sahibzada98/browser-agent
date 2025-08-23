@@ -2,3 +2,5 @@ browser-use==0.6.1
 anthropic==0.58.2
 python-dotenv==1.1.0
 httpx==0.28.1
+flask==3.0.0
+flask-cors==4.0.0

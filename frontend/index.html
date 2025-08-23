@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Agent - Workflow Recorder</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 Browser Agent</h1>
+            <p>Record and replay browser workflows with AI</p>
+        </header>
+
+        <main>
+            <section class="record-section">
+                <h2>Record New Workflow</h2>
+                
+                <div class="form-group">
+                    <label for="flowName">Flow Name:</label>
+                    <input type="text" id="flowName" placeholder="e.g. google_search, login_flow" />
+                </div>
+
+                <div class="form-group">
+                    <label for="taskDescription">Task Description:</label>
+                    <textarea id="taskDescription" rows="3" placeholder="Describe what you want to automate (e.g. Go to Google and search for Python tutorials)"></textarea>
+                </div>
+
+                <button id="recordBtn" class="btn btn-primary">
+                    <span class="btn-text">🔴 Record Workflow</span>
+                    <span class="btn-spinner" style="display: none;">⏳ Recording...</span>
+                </button>
+
+                <div id="status" class="status-message" style="display: none;"></div>
+            </section>
+
+            <section class="flows-section">
+                <h2>Saved Workflows</h2>
+                <div id="flowsList" class="flows-list">
+                    <p class="loading">Loading flows...</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
