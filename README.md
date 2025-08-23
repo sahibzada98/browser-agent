@@ -1,6 +1,6 @@
 # Browser Agent
 
-An AI-powered browser automation tool that can perform web tasks continuously while maintaining browser sessions and handling authentication.
+An AI-powered browser automation tool that can perform web tasks continuously while maintaining browser sessions and handling authentication. Record workflows and replay them later.
 
 ## Features
 
@@ -9,6 +9,8 @@ An AI-powered browser automation tool that can perform web tasks continuously wh
 - ⏸️ **Manual Credential Handling**: Pauses for you to enter login credentials manually
 - 🌐 **Real Chrome Integration**: Uses your actual Chrome browser with all extensions
 - 📝 **Interactive Task Assignment**: Get new tasks dynamically during execution
+- 📼 **Flow Recording**: Save browser workflows for later replay
+- 🔄 **Flow Replay**: Execute previously recorded workflows
 - 🐛 **Debug Logging**: Optional detailed logging for troubleshooting
 
 ## Setup
@@ -48,17 +50,37 @@ An AI-powered browser automation tool that can perform web tasks continuously wh
 # Activate virtual environment
 source venv/bin/activate
 
-# Run the agent
+# Run the agent (interactive mode)
 python browser_agent.py
+
+# Record a workflow
+python browser_agent.py --save-flow "my_workflow"
+
+# Replay a workflow
+python browser_agent.py --replay-flow "my_workflow"
 ```
 
 ### How It Works
+
+#### Interactive Mode
 1. **Agent starts** and waits for your first task
 2. **Browser opens** using your Chrome profile (with saved logins)
 3. **Execute task** - Agent performs the requested action
 4. **Get new task** - Agent asks "What's next?" instead of closing
 5. **Manual intervention** - Pause anytime to handle logins manually
 6. **Continue** - Keep working in the same browser session
+
+#### Flow Recording
+1. **Start recording** with `--save-flow "workflow_name"`
+2. **Enter task** when prompted (e.g., "Navigate to google.com")
+3. **Agent executes** and records all actions, browser state, and results
+4. **Flow saved** as JSON file in `flows/` directory
+
+#### Flow Replay
+1. **Start replay** with `--replay-flow "workflow_name"`
+2. **Agent loads** the saved workflow from `flows/workflow_name.json`
+3. **Recreates task** and executes the same actions
+4. **Browser performs** the recorded workflow automatically
 
 ### Interactive Commands
 - When agent asks for a new task, you can:
@@ -68,16 +90,33 @@ python browser_agent.py
 
 ## Examples
 
-### Initial Tasks
+### Interactive Mode Tasks
 - `"Go to LinkedIn and open my profile"`
 - `"Navigate to GitHub and find trending Python repos"`
 - `"Open Gmail and check for unread emails"`
 
-### Follow-up Tasks
-- `"Click on the first notification"`
-- `"Scroll down and read the comments"`
-- `"Open that repository in a new tab"`
-- `"Compose a new email"`
+### Flow Recording Examples
+```bash
+# Record a Google search workflow
+python browser_agent.py --save-flow "google_search"
+# Enter: "Go to google.com and search for Python tutorials"
+
+# Record a LinkedIn check
+python browser_agent.py --save-flow "linkedin_notifications"  
+# Enter: "Go to LinkedIn and check notifications"
+
+# Record email workflow
+python browser_agent.py --save-flow "check_email"
+# Enter: "Open Gmail and read the first unread email"
+```
+
+### Flow Replay Examples
+```bash
+# Replay the recorded workflows
+python browser_agent.py --replay-flow "google_search"
+python browser_agent.py --replay-flow "linkedin_notifications"
+python browser_agent.py --replay-flow "check_email"
+```
 
 ### Authentication-Heavy Sites
 - `"Go to my bank website"` → Agent navigates, you handle login → `"Check account balance"`
@@ -87,14 +126,23 @@ python browser_agent.py
 
 The agent supports several configuration options:
 
-- **Chrome Profile**: Automatically uses `~/.config/browseruse/profiles/real-chrome`
-- **Browser Path**: Uses `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+- **Chrome Profile**: Uses temporary profile at `/tmp/browser-agent-profile`
+- **Flow Storage**: Saved flows are stored in `flows/` directory as JSON files
 - **Timeout**: 100-second timeout for LLM responses
 - **Logging**: Set `BROWSER_USE_LOGGING_LEVEL=debug` for detailed logs
+
+### Flow File Structure
+Recorded flows contain:
+- **Action history**: Every action taken by the agent
+- **Browser state**: Screenshots, URLs, page titles
+- **Timestamps**: Execution timing for each step
+- **Results**: Success/failure status and extracted content
 
 ## Troubleshooting
 
 - **"Module not found"**: Make sure to activate the virtual environment
-- **Chrome profile errors**: The copied profile may have lock files - this is normal
+- **Chrome profile errors**: Browser profile conflicts - this is normal
 - **Timeout issues**: Increase the timeout in `browser_agent.py` if needed
 - **Authentication loops**: Use the manual pause feature to handle complex logins
+- **Flow not found**: Check that the flow file exists in the `flows/` directory
+- **Replay errors**: Recorded flows work best with the same browser profile and session state
